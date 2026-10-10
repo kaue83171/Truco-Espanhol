@@ -44,7 +44,9 @@ type SupabaseLikeError = {
 
 function ensureSupabase() {
   if (!isSupabaseConfigured || !supabase) {
-    throw new Error("Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY para jogar online.");
+    throw new Error(
+      "Configure VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY (ou VITE_SUPABASE_ANON_KEY) com os dados reais do seu projeto Supabase no arquivo .env.",
+    );
   }
 
   return supabase;
@@ -52,6 +54,10 @@ function ensureSupabase() {
 
 function getErrorMessage(error: unknown): string | null {
   if (error instanceof Error) {
+    if (error instanceof TypeError && /failed to fetch|networkerror|load failed/i.test(error.message)) {
+      return "Nao foi possivel conectar ao Supabase. Confira VITE_SUPABASE_URL e a chave publica no .env, sua conexao com a internet e se o projeto Supabase esta ativo.";
+    }
+
     return error.message;
   }
 
@@ -206,6 +212,12 @@ export async function createRoom(name: string): Promise<RoomEntry> {
       return { snapshot, playerId: host.id };
     } catch (error) {
       lastError = error;
+
+      // A sala só precisa de um novo código quando o código curto colide.
+      // Erros de rede/configuração não serão resolvidos repetindo a requisição.
+      if ((error as SupabaseLikeError | null)?.code !== "23505") {
+        throw new Error(getErrorMessage(error) ?? "Nao foi possivel criar a sala.");
+      }
     }
   }
 
